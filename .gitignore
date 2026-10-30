@@ -1,0 +1,72 @@
+# ============================================================
+#  Logi-Track ZeroBaran - .gitignore
+# ============================================================
+
+# متغيرات البيئة الحساسة
+.env
+.env.local
+.env.production
+*.env
+
+# بايثون
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# بيئة افتراضية
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ملفات قاعدة البيانات المحلية
+*.sqlite3
+*.db
+*.log
+
+# مجلدات الإخراج
+data/*.json
+data/*.csv
+data/cache/
+logs/
+
+# سكرتات التشغيل المحلية
+*.pid
+*.lock
+
+# GitHub Actions cache
+.github/cache/
+
+# اختبارات
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/

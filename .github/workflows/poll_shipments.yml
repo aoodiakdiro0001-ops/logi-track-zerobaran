@@ -1,0 +1,134 @@
+# =============================================================
+#  Logi-Track ZeroBaran - GitHub Actions Workflow
+#  الفحص الدوري للشحنات كل ساعة
+#  المؤلف: Baran Avisat
+# =============================================================
+
+name: Logi-Track ZeroBaran - Poll Shipments
+
+on:
+  schedule:
+    # كل ساعة (UTC) - يُعدَّل حسب الحاجة
+    - cron: '0 * * * *'
+  workflow_dispatch: # تشغيل يدوي من واجهة GitHub
+
+# لا نسمح بتشغيل أكثر من دورة في نفس الوقت
+concurrency:
+  group: poll-shipments
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    name: فحص الشحنات وإرسال الإشعارات
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      PYTHON_VERSION: '3.11'
+      TZ: Asia/Istanbul
+
+    steps:
+      # =====================================================
+      #  1. استرجاع الكود
+      # =====================================================
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      # =====================================================
+      #  2. إعداد Python
+      # =====================================================
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+
+      # =====================================================
+      #  3. تثبيت التبعيات
+      # =====================================================
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          echo "✅ تم تثبيت كل التبعيات"
+
+      # =====================================================
+      #  4. التحقق من إعداد الأسرار
+      # =====================================================
+      - name: 🔍 Verify Secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "❌ SUPABASE_URL غير مُعرف في الأسرار!"
+            exit 1
+          fi
+          if [ -z "$SUPABASE_SERVICE_KEY" ]; then
+            echo "❌ SUPABASE_SERVICE_KEY غير مُعرف في الأسرار!"
+            exit 1
+          fi
+          echo "✅ كل الأسرار الضرورية موجودة"
+
+      # =====================================================
+      #  5. تشغيل سكريبت الفحص
+      # =====================================================
+      - name: 🔄 Run Polling Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          POLL_INTERVAL_HOURS: '1'
+          TIMEZONE: Asia/Istanbul
+          DEFAULT_LANGUAGE: 'ar'
+        run: |
+          echo "🚀 بدء دورة الفحص - $(date)"
+          python scripts/poll_shipments.py
+          echo "✅ انتهت دورة الفحص - $(date)"
+
+      # =====================================================
+      #  6. رفع السجلات (للتشخيص)
+      # =====================================================
+      - name: 📤 Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logi-track-logs-${{ github.run_id }}
+          path: |
+            logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # =====================================================
+      #  7. إشعار على فشل الدورة
+      # =====================================================
+      - name: 🚨 Notify on Failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "🚨 Logi-Track ZeroBaran - فشل في دورة الفحص"
+          to: ${{ secrets.ALERT_EMAIL }}
+          from: Logi-Track ZeroBaran
+          body: |
+            حدث خطأ في دورة الفحص الدورية.
+
+            Repository: ${{ github.repository }}
+            Workflow: ${{ github.workflow }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            يرجى مراجعة السجلات وإصلاح المشكلة.
+
+            ---
+            Logi-Track ZeroBaran v1.0.0
+            المؤلف: Baran Avisat

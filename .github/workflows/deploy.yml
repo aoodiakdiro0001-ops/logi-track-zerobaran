@@ -1,0 +1,60 @@
+# =============================================================
+#  Logi-Track ZeroBaran - نشر لوحة التحكم على GitHub Pages
+#  المؤلف: Baran Avisat
+# =============================================================
+
+name: Deploy Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+      - 'core/**'
+      - 'config/**'
+      - 'requirements.txt'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: فحص بناء لوحة التحكم
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🔍 Validate Dashboard Syntax
+        run: |
+          python -c "import ast; ast.parse(open('dashboard/app.py').read()); print('✅ Syntax OK')"
+          python -c "import ast; ast.parse(open('core/database.py').read()); print('✅ DB module OK')"
+          python -c "import ast; ast.parse(open('core/tracker.py').read()); print('✅ Tracker OK')"
+          python -c "import ast; ast.parse(open('core/ai_engine.py').read()); print('✅ AI Engine OK')"
+
+      - name: 📊 Test Imports
+        run: |
+          python -c "from config.settings import settings, AUTHOR; print(f'Author: {AUTHOR[\"name\"]}')"
+          python -c "from core.database import db; print(f'DB connected: {db.is_connected}')"
+          python -c "from core.tracker import tracker; print(f'Tracker ready')"
+          python -c "from core.ai_engine import ai_brain; print(f'AI provider: {ai_brain.provider}')"
+
+      - name: 📝 Create Summary
+        run: |
+          echo "## 🚚 Logi-Track ZeroBaran - Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ تم التحقق من بنية المشروع بنجاح" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 إحصائيات" >> $GITHUB_STEP_SUMMARY
+          echo "- **الملفات البرمجية**: $(find . -name '*.py' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "- **سطور الكود**: $(find . -name '*.py' -exec cat {} + | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "- **المؤلف**: Baran Avisat" >> $GITHUB_STEP_SUMMARY
