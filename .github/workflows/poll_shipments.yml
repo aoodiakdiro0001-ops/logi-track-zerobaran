@@ -26,6 +26,10 @@ jobs:
     env:
       PYTHON_VERSION: '3.11'
       TZ: Asia/Istanbul
+      # تُمرَّر الأسرار عبر env لأن سياق secrets غير متاح داخل if
+      ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
 
     steps:
       # =====================================================
@@ -54,34 +58,41 @@ jobs:
           echo "✅ تم تثبيت كل التبعيات"
 
       # =====================================================
-      #  4. التحقق من إعداد الأسرار (غير قاتل: يتخطى الفحص
-      #     بأمان بدل فشل الدورة إن لم تُضبط الأسرار بعد)
+      #  4. التحقق من إعداد الأسرار
+      #     غير قاتل: يُصدر ملخصاً واضحاً ويُخرج configured=false
+      #     بدل فشل الدورة إن لم تُضبط الأسرار بعد.
       # =====================================================
       - name: 🔍 Verify Secrets
-        id: verify
+        id: config
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         run: |
-          configured=true
-          if [ -z "$SUPABASE_URL" ]; then
-            echo "⚠️ SUPABASE_URL غير مُعرف في الأسرار — سيتم تخطي دورة الفحص هذه المرة."
-            configured=false
-          fi
-          if [ -z "$SUPABASE_SERVICE_KEY" ]; then
-            echo "⚠️ SUPABASE_SERVICE_KEY غير مُعرف في الأسرار — سيتم تخطي دورة الفحص هذه المرة."
-            configured=false
-          fi
-          if [ "$configured" = "true" ]; then
+          MISSING=""
+          [ -z "$SUPABASE_URL" ] && MISSING="$MISSING SUPABASE_URL"
+          [ -z "$SUPABASE_SERVICE_KEY" ] && MISSING="$MISSING SUPABASE_SERVICE_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "::warning::أسرار غير مُعرَّفة:$MISSING — تم تخطّي دورة الفحص (البناء يبقى سليماً)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ⚠️ لم يُضبط الدورة بعد"
+              echo ""
+              echo "الأسرار الناقصة:$MISSING"
+              echo ""
+              echo "أضفها من: Settings → Secrets and variables → Actions"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
             echo "✅ كل الأسرار الضرورية موجودة"
           fi
-          echo "configured=$configured" >> "$GITHUB_OUTPUT"
 
       # =====================================================
-      #  5. تشغيل سكريبت الفحص (فقط عند توفر الأسرار)
+      #  5. تشغيل سكريبت الفحص (يُتخطّى إن لم تُضبط الأسرار)
       # =====================================================
       - name: 🔄 Run Polling Script
-        if: steps.verify.outputs.configured == 'true'
+        if: steps.config.outputs.configured == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -115,19 +126,21 @@ jobs:
 
       # =====================================================
       #  7. إشعار على فشل الدورة
+      #     يُشغَّل فقط عند فشل + توفر إعداد البريد كاملاً
+      #     (secrets غير متاحة داخل if — لذا نمرّرها عبر env)
       # =====================================================
       - name: 🚨 Notify on Failure
-        if: failure()
+        if: failure() && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != ''
         continue-on-error: true # فشل الإشعار لا يُفشل الدورة مرة أخرى
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
+          username: ${{ env.SMTP_USERNAME }}
+          password: ${{ env.SMTP_PASSWORD }}
           subject: "🚨 Logi-Track ZeroBaran - فشل في دورة الفحص"
           # احتياطي ثابت: إن لم يُضبط سر ALERT_EMAIL يبقى للإشعار وجهة
-          to: ${{ secrets.ALERT_EMAIL || 'baranavisat@gmail.com' }}
+          to: ${{ env.ALERT_EMAIL || 'baranavisat@gmail.com' }}
           from: Logi-Track ZeroBaran
           body: |
             حدث خطأ في دورة الفحص الدورية.

@@ -211,6 +211,10 @@ async def poll_once() -> dict:
     logger.info(f"✅ انتهت دورة الفحص - {stats}")
     logger.info("=" * 60)
 
+    # نجاح الدورة = لا أخطاء في فحص أي شحنة
+    stats["success"] = stats["errors"] == 0
+    if not stats["success"]:
+        stats["error"] = f"{stats['errors']} shipment error(s)"
     return stats
 
 
@@ -223,6 +227,10 @@ def main():
         print(f"  - تم التحديث: {stats.get('updated', 0)}")
         print(f"  - إشعارات مُرسلة: {stats.get('notifications_sent', 0)}")
         print(f"  - أخطاء: {stats.get('errors', 0)}")
+        # إرجاع رمز فشل حقيقي حتى يعمل إنذار GitHub Actions
+        if not stats.get("success", True):
+            logger.error(f"❌ انتهت الدورة بفشل: {stats.get('error', 'unknown')}")
+            sys.exit(1)
     except KeyboardInterrupt:
         logger.info("🛑 تم إيقاف الفحص بواسطة المستخدم")
     except Exception as e:
