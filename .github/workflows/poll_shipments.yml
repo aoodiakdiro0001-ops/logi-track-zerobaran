@@ -54,27 +54,34 @@ jobs:
           echo "✅ تم تثبيت كل التبعيات"
 
       # =====================================================
-      #  4. التحقق من إعداد الأسرار
+      #  4. التحقق من إعداد الأسرار (غير قاتل: يتخطى الفحص
+      #     بأمان بدل فشل الدورة إن لم تُضبط الأسرار بعد)
       # =====================================================
       - name: 🔍 Verify Secrets
+        id: verify
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
+          configured=true
           if [ -z "$SUPABASE_URL" ]; then
-            echo "❌ SUPABASE_URL غير مُعرف في الأسرار!"
-            exit 1
+            echo "⚠️ SUPABASE_URL غير مُعرف في الأسرار — سيتم تخطي دورة الفحص هذه المرة."
+            configured=false
           fi
           if [ -z "$SUPABASE_SERVICE_KEY" ]; then
-            echo "❌ SUPABASE_SERVICE_KEY غير مُعرف في الأسرار!"
-            exit 1
+            echo "⚠️ SUPABASE_SERVICE_KEY غير مُعرف في الأسرار — سيتم تخطي دورة الفحص هذه المرة."
+            configured=false
           fi
-          echo "✅ كل الأسرار الضرورية موجودة"
+          if [ "$configured" = "true" ]; then
+            echo "✅ كل الأسرار الضرورية موجودة"
+          fi
+          echo "configured=$configured" >> "$GITHUB_OUTPUT"
 
       # =====================================================
-      #  5. تشغيل سكريبت الفحص
+      #  5. تشغيل سكريبت الفحص (فقط عند توفر الأسرار)
       # =====================================================
       - name: 🔄 Run Polling Script
+        if: steps.verify.outputs.configured == 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -111,6 +118,7 @@ jobs:
       # =====================================================
       - name: 🚨 Notify on Failure
         if: failure()
+        continue-on-error: true # فشل الإشعار لا يُفشل الدورة مرة أخرى
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -118,7 +126,8 @@ jobs:
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: "🚨 Logi-Track ZeroBaran - فشل في دورة الفحص"
-          to: ${{ secrets.ALERT_EMAIL }}
+          # احتياطي ثابت: إن لم يُضبط سر ALERT_EMAIL يبقى للإشعار وجهة
+          to: ${{ secrets.ALERT_EMAIL || 'baranavisat@gmail.com' }}
           from: Logi-Track ZeroBaran
           body: |
             حدث خطأ في دورة الفحص الدورية.
